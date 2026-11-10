@@ -19,26 +19,16 @@ DB_FILE = DIR / os.getenv("DB_FILE")
 app = Flask(__name__)
 
 
-APP_SCHEMA = """
-CREATE TABLE IF NOT EXISTS reviews (
-    id          INTEGER PRIMARY KEY, 
-   group_id     INTEGER NOT NULL REFERENCES note_groups(id),
-  decision      TEXT NOT NULL,
-  reviewer      TEXT NOT NULL,
-  reviewed_at   TEXT NOT NULL,
-  notes         TEXT,
-  note_count    INTEGER
-  );
-
-CREATE INDEX IF NOT EXISTS idx_reviews_group ON reviews(group_id, id);
-  """
+REVIEWER = "default_reviewer"
 
 
+# all groups with newest review, unreviewed by default
 GROUPS_SQL = """
 SELECT g.*,
-    r.reviewer, r.reviewed_at, r.notes AS review_notes
+    COALESCE(r.decision, 'unreviewed') AS status,
+    r.reviewer, r.reviewed_at
 FROM note_groups g
-LEFT JOIN reviews r on r.id = (SELECT MAX(id) FROM reviews WHERE group_id = g.id)
+LEFT JOIN reviews r ON r.id = (SELECT MAX(id) FROM reviews WHERE group_id = g.id)
 """
 
 
@@ -60,17 +50,28 @@ def close_db(_exc):
     if db is not None:
         db.close()
 
-# connect to DB and run script for displaying reviews
-def init_db():
-    with sqlite3.connect(DB_FILE) as con:
-        con.executescript(APP_SCHEMA)
-
 @app.route("/")
 def groups():
-    rows = get_db().execute("""
-        SELECT * FROM note_groups ORDER BY risk_score DESC, note_count DESC"""
+    rows = get_db().execute(
+        f"{GROUPS_SQL} ORDER BY g.risk_score DESC, g.note_count DESC"
     ).fetchall()
     return render_template("groups.html", groups=rows)
+
+
+@app.post("/review/<int:group_id>")
+def review(group_id):
+    decision = request.form.get("decision")
+    if decision not in ("approved", "rejected"):
+        abort(400)
+
+    db = get_db()
+    db.execute("""
+        INSERT INTO reviews (group_id, decision, reviewer, reviewed_at) VALUES(?, ?, ?, ?)
+        """,
+        (group_id, decision, REVIEWER, datetime.now().isoformat()),
+    )
+    db.commit()
+    return (redirect(url_for("groups", _anchor=f"g{group_id}")))
 
 
     

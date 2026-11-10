@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}{{ STATUSES[status] }} groups{% endblock %}
+
+{% macro sort_link(key, label) -%}
+  {%- set active = sort == key -%}
+  {%- set next_order = 'asc' if active and order == 'desc' else 'desc' -%}
+  <a class="sort{{ ' active' if active }}"
+     href="{{ url_for('groups', status=status, sort=key, order=next_order, q=q or None) }}"
+     {% if active %}aria-sort="{{ 'ascending' if order == 'asc' else 'descending' }}"{% endif %}>
+    {{ label }}{% if active %}<span aria-hidden="true">{{ ' ▲' if order == 'asc' else ' ▼' }}</span>{% endif %}
+  </a>
+{%- endmacro %}
+
+{% block content %}
+<nav class="tabs" aria-label="Review status">
+  {% for key, label in STATUSES.items() %}
+    <a href="{{ url_for('groups', status=key) }}" class="tab tab-{{ key }}{{ ' current' if key == status }}"
+       {% if key == status %}aria-current="page"{% endif %}>
+      {{ label }} <span class="count">{{ "{:,}".format(counts.get(key, 0)) }}</span>
+    </a>
+  {% endfor %}
+</nav>
+
+<div class="toolbar">
+  <form class="search" method="get" role="search">
+    <input type="hidden" name="sort" value="{{ sort }}">
+    <input type="hidden" name="order" value="{{ order }}">
+    <input type="search" name="q" value="{{ q }}" aria-label="Search groups"
+           placeholder="Search by user, context, role, record type or group number">
+    <button class="btn">Search</button>
+    {% if q %}<a class="link" href="{{ url_for('groups', status=status, sort=sort, order=order) }}">Clear</a>{% endif %}
+  </form>
+  <a class="btn" href="{{ url_for('export_status', status=status, q=q or None) }}">Export {{ STATUSES[status]|lower }} as CSV</a>
+</div>
+
+<form method="post" action="{{ url_for('review') }}" class="review-form" data-review-form>
+  <input type="hidden" name="back" value="{{ request.full_path }}">
+
+  <div class="actions">
+    <p class="selected" aria-live="polite"><span data-selected-count>0</span> selected</p>
+    <label class="notes">
+      <span class="visually-hidden">Notes for this decision</span>
+      <input name="notes" placeholder="Notes for this decision (optional)" maxlength="2000">
+    </label>
+    {% for target in targets %}
+      <button class="btn btn-{{ target }}" name="decision" value="{{ target }}" disabled data-needs-selection>
+        {{ action_label(target, status) }}
+      </button>
+    {% endfor %}
+  </div>
+
+  {% if rows %}
+  <div class="table-wrap">
+    <table class="groups">
+      <thead>
+        <tr>
+          <th class="risk">{{ sort_link('risk', 'Risk') }}</th>
+          <th>Group</th>
+          <th>User</th>
+          <th>Context</th>
+          <th>Record types</th>
+          <th>{{ sort_link('started', 'Started') }}</th>
+          <th class="num">{{ sort_link('rows', 'Rows') }}</th>
+          <th class="num">Records</th>
+          <th>Changes</th>
+          <th>Flags</th>
+          {% if status != 'unreviewed' %}<th>{{ sort_link('reviewed', 'Decision') }}</th>{% endif %}
+          <th class="pick">
+            <input type="checkbox" data-select-all aria-label="Select every group on this page">
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr class="risk-{{ r.risk_score|level }}">
+          <td class="risk num">{{ r.risk_score or '–' }}</td>
+          <td><a href="{{ url_for('group_detail', group_id=r.id, back=request.full_path) }}">#{{ r.id }}</a></td>
+          <td>
+            {{ r.name }}
+            {% if r.roles %}<span class="sub">{{ r.roles|listing }}</span>{% endif %}
+          </td>
+          <td>{{ r.context or '(blank)' }}</td>
+          <td>{{ r.record_types|listing or '(blank)' }}</td>
+          <td class="nowrap">
+            {{ r.start_date|minute }}
+            <span class="sub">{{ r|duration }}</span>
+          </td>
+          <td class="num">{{ "{:,}".format(r.note_count) }}</td>
+          <td class="num">{{ "{:,}".format(r.record_count) }}</td>
+          <td class="changes">
+            {%- set parts = [] -%}
+            {%- if r.n_create %}{% set _ = parts.append(r.n_create ~ ' created') %}{% endif -%}
+            {%- if r.n_set %}{% set _ = parts.append(r.n_set ~ ' set') %}{% endif -%}
+            {%- if r.n_change %}{% set _ = parts.append(r.n_change ~ ' changed') %}{% endif -%}
+            {%- if r.n_unset %}{% set _ = parts.append(r.n_unset ~ ' unset') %}{% endif -%}
+            {{ parts|join(', ') }}
+          </td>
+          <td class="flags">
+            {% for label, n, why in r|flags %}
+              <span class="flag" title="{{ why }}">{{ label }} <span class="flag-n">{{ n }}</span></span>
+            {% endfor %}
+          </td>
+          {% if status != 'unreviewed' %}
+          <td class="decision">
+            <span class="by">{{ r.reviewer }}</span>
+            <span class="sub">{{ r.reviewed_at|minute }}</span>
+            {% if r.review_notes %}<span class="note">{{ r.review_notes }}</span>{% endif %}
+          </td>
+          {% endif %}
+          <td class="pick">
+            <input type="checkbox" name="group_ids" value="{{ r.id }}" aria-label="Select group {{ r.id }}">
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <div class="empty">
+      {% if q %}
+        <p>No {{ STATUSES[status]|lower }} groups match “{{ q }}”.</p>
+      {% elif status == 'unreviewed' %}
+        <p>Every group has a decision. Check the other tabs to revisit one.</p>
+      {% else %}
+        <p>No groups are in {{ STATUSES[status]|lower }} yet. Select groups on the
+          <a href="{{ url_for('groups', status='unreviewed') }}">Unreviewed</a> tab to move them here.</p>
+      {% endif %}
+    </div>
+  {% endif %}
+</form>
+
+{% if pages > 1 %}
+<nav class="pager" aria-label="Pages">
+  {% if page > 1 %}
+    <a class="btn" href="{{ url_for('groups', status=status, sort=sort, order=order, q=q or None, page=page - 1) }}">Previous</a>
+  {% endif %}
+  <span>Page {{ page }} of {{ pages }}, {{ "{:,}".format(total) }} groups</span>
+  {% if page < pages %}
+    <a class="btn" href="{{ url_for('groups', status=status, sort=sort, order=order, q=q or None, page=page + 1) }}">Next</a>
+  {% endif %}
+</nav>
+{% endif %}
+{% endblock %}

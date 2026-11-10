@@ -49,7 +49,7 @@ CREATE INDEX IF NOT EXISTS idx_notes_record ON notes(record_type, record_id);
 
 CREATE TABLE IF NOT EXISTS reviews (
     id              INTEGER PRIMARY KEY,
-    group_id        INTEGER NOT NULL REFERENCES note_groups(id)
+    group_id        INTEGER NOT NULL REFERENCES note_groups(id),
     decision        TEXT NOT NULL CHECK(decision IN ('approved', 'rejected')),
     reviewer        TEXT NOT NULL,
     reviewed_at     TEXT NOT NULL,
