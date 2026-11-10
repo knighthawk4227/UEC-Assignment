@@ -47,11 +47,23 @@ CREATE TABLE IF NOT EXISTS notes (
 CREATE INDEX IF NOT EXISTS idx_notes_group ON notes(group_id);
 CREATE INDEX IF NOT EXISTS idx_notes_record ON notes(record_type, record_id);
 
+CREATE TABLE IF NOT EXISTS reviews (
+    id              INTEGER PRIMARY KEY,
+    group_id        INTEGER NOT NULL REFERENCES note_groups(id)
+    decision        TEXT NOT NULL CHECK(decision IN ('approved', 'rejected')),
+    reviewer        TEXT NOT NULL,
+    reviewed_at     TEXT NOT NULL,
+    notes           TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_reviews_groups ON reviews(group_id, id);
+
 """
 
 con = sqlite3.connect(DB_FILE)
 con.execute("PRAGMA foreign_keys = ON")
 # drop tables if they exist
+con.execute("DROP TABLE IF EXISTS reviews")
 con.execute("DROP TABLE IF EXISTS notes")
 con.execute("DROP TABLE IF EXISTS note_groups")
 con.executescript(SCHEMA)
