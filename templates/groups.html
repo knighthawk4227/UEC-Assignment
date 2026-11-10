@@ -31,8 +31,7 @@
     {% for group in groups %}
     <tr id="g{{ group.id }}">
       <td>{{ group.risk_score }}</td>
-      <td>{{ group.id }}</td>
-      <td>{{ group.name }}</td>
+      <td><a href="{{ url_for('group_detail', group_id=group.id) }}">{{ group.id }}</a></td>      <td>{{ group.name }}</td>
       <td>{{ group.context or "(blank)" }}</td>
       <td>{{ group.start_date }}</td>
       <td>{{ group.end_date }}</td>

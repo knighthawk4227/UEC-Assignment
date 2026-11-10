@@ -1,126 +1,62 @@
-{% extends "base.html" %}
-{% block title %}Group {{ group.id }}{% endblock %}
-{% block content %}
-<p><a class="link" href="{{ back }}">Back to the list</a></p>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Group {{ group.id }}</title>
+  <style>
+    body   { font-family: sans-serif; margin: 2rem; }
+    table  { border-collapse: collapse; }
+    th, td { border: 1px solid #ccc; padding: 4px 8px; text-align: left; }
+    th     { background: #f3f3f3; }
+    .approved { color: green; }
+    .rejected { color: firebrick; }
+  </style>
+</head>
+<body>
+  <p><a href="{{ url_for('groups', _anchor='g' ~ group.id) }}">Back to all groups</a></p>
 
-<section class="group-head risk-{{ group.risk_score|level }}">
-  <div>
-    <h1>Group #{{ group.id }}: {{ group.name }} in {{ group.context or '(blank context)' }}</h1>
-    <p class="summary">
-      {{ "{:,}".format(group.note_count) }} rows across {{ "{:,}".format(group.record_count) }} records,
-      {{ group|span }} ({{ group|duration }}).
-      {% if group.roles %}Role: {{ group.roles|listing }}.{% else %}No role recorded.{% endif %}
-    </p>
-    <p class="summary">
-      {% set flag_list = group|flags %}
-      {% if flag_list %}
-        Risk {{ group.risk_score }}:
-        {% for label, n, why in flag_list %}
-          <span class="flag" title="{{ why }}">{{ label }} <span class="flag-n">{{ n }}</span></span>
-        {% endfor %}
-      {% else %}
-        No risk flags.
-      {% endif %}
-    </p>
-  </div>
-  <p class="status status-{{ group.status }}">
-    {{ STATUSES[group.status] }}
-    {% if group.reviewer %}<span class="sub">{{ DECISION_TEXT[group.status] }} by {{ group.reviewer }}, {{ group.reviewed_at|minute }}</span>{% endif %}
+  <h1>Group {{ group.id }}: {{ group.name }}, {{ group.context or "(blank)" }}</h1>
+  <p>
+    {{ group.start_date }} to {{ group.end_date }},
+    {{ group.note_count }} rows, risk {{ group.risk_score }},
+    <span class="{{ group.status }}">{{ group.status }}{% if group.reviewer %} by {{ group.reviewer }}{% endif %}</span>
   </p>
-</section>
 
-<form method="post" action="{{ url_for('review') }}" class="actions">
-  <input type="hidden" name="group_ids" value="{{ group.id }}">
-  <input type="hidden" name="back" value="{{ request.full_path }}">
-  <label class="notes">
-    <span class="visually-hidden">Notes for this decision</span>
-    <input name="notes" placeholder="Notes for this decision (optional)" maxlength="2000">
-  </label>
-  {% for target in targets %}
-    <button class="btn btn-{{ target }}" name="decision" value="{{ target }}">{{ action_label(target, group.status) }}</button>
-  {% endfor %}
-  <a class="btn" href="{{ url_for('export_group', group_id=group.id) }}">Export rows as CSV</a>
-</form>
+  <form method="post" action="{{ url_for('review', group_id=group.id) }}">
+    <button name="decision" value="approved">Approve</button>
+    <button name="decision" value="rejected">Reject</button>
+  </form>
 
-<h2>Changes in this group</h2>
-{% if group.note_count > notes|length %}
-  <p class="muted">Showing the first {{ "{:,}".format(notes|length) }} of {{ "{:,}".format(group.note_count) }} rows. The CSV export has all of them.</p>
-{% endif %}
-<div class="table-wrap">
-  <table class="notes-table">
-    <thead>
-      <tr>
-        <th>Date</th>
-        <th>Role</th>
-        <th>Record type</th>
-        <th class="num">Record ID</th>
-        <th>Record</th>
-        <th>Type</th>
-        <th>Field</th>
-        <th>Old value</th>
-        <th>New value</th>
-        <th class="num">Line</th>
-        <th class="num">Line transaction</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for n in notes %}
-      {% set nf = note_flags[n.id] %}
-      <tr class="{{ 'flagged' if nf }}">
-        <td class="nowrap">{{ n.date|minute }}</td>
-        <td>{{ n.role or '(blank)' }}</td>
-        <td>{{ n.record_type or '(blank)' }}</td>
-        <td class="num">{{ n.record_id if n.record_id is not none }}</td>
-        <td>{{ n.record }}</td>
-        <td>{{ n.type }}</td>
-        <td>
-          {{ n.field }}
-          {% if nf %}<span class="sub flag-text">{{ nf|join(', ') }}</span>{% endif %}
-        </td>
-        <td class="value">{{ n.old_value if n.old_value is not none }}</td>
-        <td class="value">{{ n.new_value if n.new_value is not none }}</td>
-        <td class="num">{{ n.line_id if n.line_id is not none }}</td>
-        <td class="num">{{ n.line_transaction_id if n.line_transaction_id is not none }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
+  {% if group.note_count > notes|length %}
+    <p>Showing the first {{ notes|length }} of {{ group.note_count }} rows.</p>
+  {% endif %}
+
+  <table>
+    <tr>
+      <th>Date</th>
+      <th>Role</th>
+      <th>Record type</th>
+      <th>Record ID</th>
+      <th>Record</th>
+      <th>Type</th>
+      <th>Field</th>
+      <th>Old value</th>
+      <th>New value</th>
+    </tr>
+
+    {% for note in notes %}
+    <tr>
+      <td>{{ note.date }}</td>
+      <td>{{ note.role or "(blank)" }}</td>
+      <td>{{ note.record_type or "(blank)" }}</td>
+      <td>{{ note.record_id or "" }}</td>
+      <td>{{ note.record or "" }}</td>
+      <td>{{ note.type }}</td>
+      <td>{{ note.field }}</td>
+      <td>{{ note.old_value or "" }}</td>
+      <td>{{ note.new_value or "" }}</td>
+    </tr>
+    {% endfor %}
   </table>
-</div>
-
-<div class="split">
-  <section>
-    <h2>Decision history</h2>
-    {% if history %}
-      <ol class="history">
-        {% for h in history %}
-          <li>
-            <strong class="status-text status-{{ h.decision }}">{{ DECISION_TEXT[h.decision] }}</strong>
-            by {{ h.reviewer }} on {{ h.reviewed_at|minute }}
-            <span class="sub">{{ h.note_count }} rows at the time</span>
-            {% if h.notes %}<p class="note">{{ h.notes }}</p>{% endif %}
-          </li>
-        {% endfor %}
-      </ol>
-    {% else %}
-      <p class="muted">No decisions yet.</p>
-    {% endif %}
-  </section>
-
-  <section>
-    <h2>Other groups that changed these records</h2>
-    {% if related %}
-      <ul class="related">
-        {% for r in related %}
-          <li class="risk-{{ r.risk_score|level }}">
-            <a href="{{ url_for('group_detail', group_id=r.id, back=back) }}">#{{ r.id }}</a>
-            {{ r.name }}, {{ r.context or '(blank)' }}, {{ r.start_date|minute }}
-            <span class="sub">{{ STATUSES[r.status] }}</span>
-          </li>
-        {% endfor %}
-      </ul>
-    {% else %}
-      <p class="muted">No other group touched these records.</p>
-    {% endif %}
-  </section>
-</div>
-{% endblock %}
+</body>
+</html>

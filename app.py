@@ -57,6 +57,17 @@ def groups():
     ).fetchall()
     return render_template("groups.html", groups=rows)
 
+@app.route("/group/<int:group_id>")
+def  group_detail(group_id):
+    db = get_db()
+    group = db.execute(f"{GROUPS_SQL} WHERE g.id = ?", (group_id,)).fetchone()
+    if group is None:
+        abort(404)
+
+    notes = db.execute("""
+        SELECT * FROM notes WHERE group_id = ? ORDER BY date, id limit 500""", (group_id,)).fetchall()
+    return render_template("group.html", group=group, notes=notes)
+
 
 @app.post("/review/<int:group_id>")
 def review(group_id):
