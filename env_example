@@ -1,0 +1,3 @@
+FILE="file.xlsx"
+GAP=number_of_mins_you_want
+DB_FILE="dbname.db"
