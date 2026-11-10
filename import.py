@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 
 DIR = Path(__file__).resolve().parent
 load_dotenv(DIR / ".env")
-DB_FILE = os.getenv("DB_FILE")
+DB_FILE = DIR / os.getenv("DB_FILE")
 FILE = DIR / os.getenv("FILE")
 # current folder
 
