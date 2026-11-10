@@ -71,7 +71,4 @@ def review(group_id):
         (group_id, decision, REVIEWER, datetime.now().isoformat()),
     )
     db.commit()
-    return (redirect(url_for("groups", _anchor=f"g{group_id}")))
-
-
-    
+    return (redirect(url_for("groups", _anchor=f"g{group_id}"))) 
