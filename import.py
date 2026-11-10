@@ -23,16 +23,7 @@ CREATE TABLE IF NOT EXISTS note_groups (
     start_date      TEXT,
     end_date        TEXT,
     note_count      INTEGER,
-    record_count    INTEGER,
-    roles           TEXT,
-    record_types    TEXT,
-    n_create        INTEGER,
-    n_set           INTEGER,
-    n_change        INTEGER,
-    n_unset         INTEGER, 
-    risk_score      INTEGER,
-    risk_flags      TEXT
-    
+    risk_score      INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS notes (
@@ -54,6 +45,7 @@ CREATE TABLE IF NOT EXISTS notes (
 );
 
 CREATE INDEX IF NOT EXISTS idx_notes_group ON notes(group_id);
+CREATE INDEX IF NOT EXISTS idx_notes_record ON notes(record_type, record_id);
 
 """
 
@@ -113,16 +105,34 @@ for note_id, date, name, context in rows:
 # all 100k notes to their respective group
 con.executemany("UPDATE notes SET group_id = ? WHERE id = ?", updates)
 
-# fill group end time and total notes
+# fill group end time and total note, also go through and set risk based off type
 con.execute("""
     UPDATE note_groups SET
         end_date = (SELECT MAX(date) FROM notes WHERE group_id = note_groups.id),
-        note_count = (SELECT COUNT(*) FROM notes WHERE group_id = note_groups.id)"""
-)
+        note_count = (SELECT COUNT(*) FROM notes WHERE group_id = note_groups.id),
+        risk_score = (
+            SELECT MAX(CASE
+                WHEN field LIKE '%password%'           THEN 5
+                WHEN field LIKE '%bank%'
+                  OR field LIKE '%routing%'
+                  OR field LIKE '%iban%'
+                  OR field LIKE '%swift%'
+                  OR field LIKE '%eft%'
+                  OR field LIKE '%account number%'
+                  OR field LIKE '%payment method%'     THEN 5
+                WHEN record_type LIKE '%script%'
+                  OR record_type LIKE '%workflow%'
+                  OR record_type LIKE '%plugin%'       THEN 4
+                WHEN role IS NULL                      THEN 3
+                WHEN context IS NULL                   THEN 2
+                ELSE 0
+            END)
+            FROM notes WHERE group_id = note_groups.id
+        )""")
 con.commit()
 
 # print # of rows in notes
 print(con.execute("SELECT COUNT(*), COUNT(group_id) FROM notes").fetchone())
-# print # of groups made 
+# print # of groups made
 print(con.execute("SELECT COUNT(*) FROM note_groups").fetchone())
 con.close()
