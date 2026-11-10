@@ -4,32 +4,32 @@ UEC Assignment to create an interface for Teams to review high quantities of dat
 ## How to run:
 - Data file on same dir level as import.py
   
-- Add env variables
-  - File name without path
-  - gap you want to set for doc search
-  - "dbname".db
+- Copy env_example to .env and set
+  - FILE: file name without path
+  - GAP: minutes between rows before a new group starts
+  - DB_FILE: "dbname".db
 - create a python env
   - pip install -r requirements.txt
-- pythton import.py
+- python import.py (re-running it rebuilds the db and clears reviews)
 - python -m flask --app app run --port {port #}
 - open url displayed in terminal
 
 ### grouping approach, the alternatives you considered and why you chose this one:
-- #### Rows are grouped by user and context. Within that, rows are sorted by time, and a new group starts whenever more than 5 minutes have passed since the previous row. 
+- #### Rows are grouped by user and context. Within that, rows are sorted by time, and a new group starts whenever more than `GAP` minutes (I used 5) have passed since the previous row. 
 ### some alternatives I thought of initially looking at the data
-  - Originally I thought of sorting it by just record ID's but I realized that maybe inforamtion being changed on a record might be not the same action necessarily and it may produce too many or too few rows depending on the # of record ID's or names
+  - Originally I thought of sorting it by just record ID's but I realized that maybe information being changed on a record might be not the same action necessarily and it may produce too many or too few groups depending on the # of record ID's or names
     
   -  This still didn't work well for bulk changes. Mass updates, CSV imports and scripts (many of which run overnight) touch many record IDs at once, so a single action would be split into hundreds of groups
     
   - I did consider the idea of grouping by mostly record names as well since there was only around 8,000 unique record names but I also didn't want to risk the possibility of records being changed months apart be something that doesn't need to be grouped in one.
 ### Why I chose this approach
-- The reason I chose the method I did was it was able to encapsulate the Changes made to different records but also keep the ones that are not as related to be in different groups and I felt this way seperated them as much as I could (looking back adding record type definitely would have helped)
+- The reason I chose the method I did was it was able to encapsulate the Changes made to different records but also keep the ones that are not as related to be in different groups and I felt this way separated them as much as I could (looking back adding record type definitely would have helped)
 
 ### Where it breaks down
 - The bulk runs make very large groups
   - Some of the mass updates and scripts run on a lot of files so these all end up getting put in the same group
 
-- Because I didn't use record type it some groups are bigger than they need to be
+- Because I didn't use record type some groups are bigger than they need to be
   - Since I did not implement the record_type it ends up putting more things into a group than need be 
 ### Stack:
 #### Python 
@@ -41,12 +41,12 @@ UEC Assignment to create an interface for Teams to review high quantities of dat
 #### sqlite
 - Single file is easy for project and someone doesn't need to setup postgres server or have a whole docker container setup just to run their own postgres server
 
-what the interface does and the main design decisions
-- The interface takes all the groups and displays them via risk.
+### what the interface does and the main design decisions
+- The interface takes all the groups and displays them sorted by risk, highest first.
   - The way I determined if something is risky is mostly doing changing of sensitive data,
-    - if it is changing passwords or has bank info then it would be high risk
-    - Creating a user, changing a script, or blank might be medium
-    - Low would just have none of the above in it
+    - if it is changing passwords or has bank info then it would be high risk (5)
+    - Changing a script, workflow or plugin record (4), a blank role (3) or a blank context (2) would be medium
+    - Low (0) would just have none of the above in it
       
 - it displays groups
   - you can press on a group id to see the rows in that group
@@ -57,7 +57,7 @@ what the interface does and the main design decisions
   - I wanted to add a review by manager but did not get the time
 
 ### Assumptions I made:
-- I assumed the the name of records may not be extremely useful in terms of grouping
+- I assumed the name of records may not be extremely useful in terms of grouping
 - Grouping was not just supposed to be all Id's in one group or all Records with the same name in one group
 - The way someone is going to be approving or denying these would be more focused on actions done near in date therefore record names would not be extremely useful
  
@@ -71,7 +71,7 @@ what the interface does and the main design decisions
   
 - record name (maybe for specific contexts)
 - The Frontend
-  - Basic html for it and got an AI to generate it based off a drawing I made
+  - Basic html for it. An AI generated a full UI from a drawing I made, but I used simpler templates that fit my backend
   - If I were to redo it I would probably use something with Javascript and react to allow for colour changes and button presses that don't refresh the page everytime
   - Add filtering
   - The ability to change the group a row is in
